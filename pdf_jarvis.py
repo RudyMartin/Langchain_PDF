@@ -101,7 +101,7 @@ def get_most_similar_text(query_text):
             DOT_PRODUCT_F32(JSON_ARRAY_PACK_F32(:embeddings), embeddings) AS similarity
         FROM multiple_pdf_example
         ORDER BY similarity DESC
-        LIMIT 1
+        LIMIT 5
     """)
 
     ss_password = st.secrets['SINGLESTORE_PASSWORD']
@@ -112,9 +112,11 @@ def get_most_similar_text(query_text):
     connection = db.create_engine(
         f"mysql+pymysql://{ss_user}:{ss_password}@{ss_host}:{ss_port}/{ss_database}")
     with connection.begin() as conn:
-        result = conn.execute(stmt, {"embeddings": str(query_embedding)}).fetchone()
+        results = conn.execute(stmt, {"embeddings": str(query_embedding)}).fetchall()
 
-    return result[0]
+    # Combine the text of the top N results
+    combined_text = " ".join([result[0] for result in results])
+    return combined_text
 
 def truncate_table():
 
@@ -142,8 +144,11 @@ def handle_userinput(user_question):
         most_similar_text = get_most_similar_text(user_question)
         
         # Pass the most similar text from the book as a part of the prompt to ChatGPT
-        prompt = f"The user asked: {user_question}. The most similar text from the documents is: {most_similar_text}"
-        
+        prompt = (f"The user asked: {user_question}. Based on the trust document, "
+                  f"the relevant information includes the following excerpts: {most_similar_text}. "
+                  "Please provide a detailed and comprehensive response based on the above information addressing each of my clients questions."
+                  "If possible, extract and list any article numbers, section names, or topic references from the context provided.")
+
         #print prompt
         #st.write(prompt)
 
@@ -172,9 +177,9 @@ def main():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = deque(maxlen=100)
 
-    st.header("Chat with multiple PDFs :books:")
-    st.write("Uses Langchain, OpenAI LLMs , Embeddings , Vector DB and semantic search to pass the PDF content as Context to LLM to answer user questions.")
-    user_question = st.text_input("Ask a question about your documents:")
+    st.header("Chat with your Trust Advisor :books:")
+    st.write("Uses Langchain, OpenAI LLMs , Embeddings , Vector DB and semantic search to pass the Trust document content as Context to LLM to answer user questions.")
+    user_question = st.text_input("Ask a question about your Trust documents:")
 
     with st.sidebar:
         st.subheader("Your documents")
